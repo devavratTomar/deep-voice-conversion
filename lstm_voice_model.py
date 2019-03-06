@@ -53,7 +53,7 @@ def create_model_rnn(input_speech, seq_length, keep_prob, previous_state=None, r
             # layer 1:
             b1 = utils.get_variable('b1', [CONFIG.num_hidden_1], tf.zeros_initializer())
             h1 = utils.get_variable('h1', [CONFIG.num_features, CONFIG.num_hidden_1], tf.contrib.layers.xavier_initializer())
-            layer_1 = tf.nn.relu(tf.add(tf.matmul(input_data, h1), b1))
+            layer_1 = tf.minimum(tf.nn.leaky_relu(tf.add(tf.matmul(input_data, h1), b1)), CONFIG.relu_clip)
             
             layer_1 = tf.nn.dropout(layer_1, keep_prob=keep_prob)
             layers['layer_1'] = layer_1
@@ -61,7 +61,7 @@ def create_model_rnn(input_speech, seq_length, keep_prob, previous_state=None, r
             #layer 2:
             b2 = utils.get_variable('b2', [CONFIG.num_hidden_2], tf.zeros_initializer())
             h2 = utils.get_variable('h2', [CONFIG.num_hidden_1, CONFIG.num_hidden_2], tf.contrib.layers.xavier_initializer())
-            layer_2 = tf.nn.relu(tf.add(tf.matmul(layer_1, h2), b2))
+            layer_2 = tf.minimum(tf.nn.relu(tf.add(tf.matmul(layer_1, h2), b2)), CONFIG.relu_clip)
             
             layer_2 = tf.nn.dropout(layer_2, keep_prob=keep_prob)
             layers['layer_2'] = layer_2
@@ -69,7 +69,7 @@ def create_model_rnn(input_speech, seq_length, keep_prob, previous_state=None, r
             #layer 3:
             b3 = utils.get_variable('b3', [CONFIG.num_hidden_3], tf.zeros_initializer())
             h3 = utils.get_variable('h3', [CONFIG.num_hidden_2, CONFIG.num_hidden_3], tf.contrib.layers.xavier_initializer())
-            layer_3 = tf.nn.relu(tf.add(tf.matmul(layer_2, h3), b3))
+            layer_3 = tf.minimum(tf.nn.relu(tf.add(tf.matmul(layer_2, h3), b3)), CONFIG.relu_clip)
             
             layer_3 = tf.nn.dropout(layer_3, keep_prob=keep_prob)
             layers['layer_3'] = layer_3
@@ -96,7 +96,7 @@ def create_model_rnn(input_speech, seq_length, keep_prob, previous_state=None, r
             b5 = utils.get_variable('b5', CONFIG.num_hidden_5, tf.zeros_initializer())
             h5 = utils.get_variable('h5', [CONFIG.num_cell_dim, CONFIG.num_hidden_5],  tf.contrib.layers.xavier_initializer())
             
-            layer_5 = tf.nn.relu(tf.add(tf.matmul(output, h5), b5))
+            layer_5 = tf.minimum(tf.nn.leaky_relu(tf.add(tf.matmul(output, h5), b5)), CONFIG.relu_clip)
             layer_5 = tf.nn.dropout(layer_5, keep_prob=keep_prob)
             
             # Now we muliply layer 5 with matrix h6 and add bias b6 to get phoneme class logits
