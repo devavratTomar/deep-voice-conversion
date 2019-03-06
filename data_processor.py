@@ -95,11 +95,9 @@ class DataProcessor_TIMIT(object):
         labels = np.zeros(stft_all.shape[1])
         
         for t in range(stft_all.shape[1]):
-            try:
-                arg_label = np.where(label_seq_start <= t*hop_len)[0][-1]
-                labels[t] = TIMIT_PHONE_DICTIONARY[label_codes[arg_label]]
-            except:
-                print(t, label_seq, audio_seq)
+            arg_label = np.where(label_seq_start <= t*hop_len)[0][-1]
+            labels[t] = TIMIT_PHONE_DICTIONARY[label_codes[arg_label]]
+            
         return stft_all, labels
      
     def all_speech_getter(self, n_epochs=10, max_time_steps=32):
