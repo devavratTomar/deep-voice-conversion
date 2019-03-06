@@ -80,6 +80,10 @@ class DataProcessor_TIMIT(object):
         label_seq_start = label_seq[:, 0].astype(int)
         label_codes = label_seq[:, 2]
         
+        #clip audio to start and end mark
+        audio_seq = audio_seq[label_seq_start[0]: label_seq[:,1].astype(int)[-1]]
+        label_seq_start = label_seq_start - label_seq_start[0]
+        
         window_len = self.samping_rate*window_size//1000
         hop_len = window_len//4
         
