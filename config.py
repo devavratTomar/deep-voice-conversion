@@ -18,6 +18,7 @@ class ConfigSingleton:
 CONFIG = ConfigSingleton()
 
 ConfigSingleton._config = {
+        'relu_clip':20,
         'num_features':161,
         'num_classes':61,
         'num_rnn_layers':1,
