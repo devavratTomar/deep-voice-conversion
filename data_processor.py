@@ -86,14 +86,16 @@ class DataProcessor_TIMIT(object):
         stft_features = librosa.core.stft(audio_seq, n_fft=window_len, win_length=window_len)
         
         #stft_all = np.concatenate([np.real(stft_features), np.imag(stft_features)], axis=0)
-        stft_all = np.concatenate([np.log(np.abs(stft_features)), np.angle(stft_features)], axis=0)
+        stft_all = np.log(np.abs(stft_features))
         
         labels = np.zeros(stft_all.shape[1])
         
         for t in range(stft_all.shape[1]):
-            arg_label = np.where(label_seq_start <= t*hop_len)[0][-1]
-            labels[t] = TIMIT_PHONE_DICTIONARY[label_codes[arg_label]]
-        
+            try:
+                arg_label = np.where(label_seq_start <= t*hop_len)[0][-1]
+                labels[t] = TIMIT_PHONE_DICTIONARY[label_codes[arg_label]]
+            except:
+                print(t, label_seq, audio_seq)
         return stft_all, labels
      
     def all_speech_getter(self, n_epochs=10, max_time_steps=32):

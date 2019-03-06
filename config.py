@@ -18,13 +18,12 @@ class ConfigSingleton:
 CONFIG = ConfigSingleton()
 
 ConfigSingleton._config = {
-        'num_features':322,
-        'num_hidden_units':512,
+        'num_features':161,
         'num_classes':61,
         'num_rnn_layers':1,
-        'num_hidden_1':1024,
-        'num_hidden_2':512,
-        'num_hidden_3':512,
-        'num_cell_dim':1024,
-        'num_hidden_5': 1024
+        'num_hidden_1':2048,
+        'num_hidden_2':2048,
+        'num_hidden_3':2048,
+        'num_cell_dim':2048,
+        'num_hidden_5':1024
         }

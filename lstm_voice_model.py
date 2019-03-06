@@ -35,11 +35,6 @@ def create_model_rnn(input_speech, seq_length, keep_prob, previous_state=None, r
     :param keep_prob: tf.placeholder for dropouts
     """
     
-    logging.info("Rnn Layers: {num_layers}, Cells in Hidden layer: {num_hidden}, Phonemes Classes: {num_classes}".format(
-                  num_layers=CONFIG.num_rnn_layers,
-                  num_hidden=CONFIG.num_hidden_units,
-                  num_classes=CONFIG.num_classes))
-    
     layers = {}
     
     batch_size = tf.shape(input_speech)[0]
@@ -278,6 +273,8 @@ class DeepPhoenemeModelTrainer(object):
         accuracy = np.sum(predictions == batch_speech_phonemes)/batch_speech_phonemes.size
         
         logging.info("loss = {:.8f} accuracy = {:.2f}".format(cost, accuracy*100))
+        logging.info("predictions = {}".format(predictions))
+        logging.info("ground_truth = {}".format(batch_speech_phonemes))
         summary_writer.add_summary(summary_str, step)
         summary_writer.flush()
         
