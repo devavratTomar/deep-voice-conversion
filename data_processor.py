@@ -53,7 +53,7 @@ class DataProcessor_TIMIT(object):
         self.samping_rate = sampling_rate
     
     
-    def __read_phones(self, filename):
+    def read_phones(self, filename):
         with open(filename) as f:
             lines = f.readlines()
             
@@ -63,7 +63,7 @@ class DataProcessor_TIMIT(object):
             data.append(line)
         return np.array(data)
     
-    def __read_audio(self, filename):
+    def read_audio(self, filename):
         aud, sr = librosa.load(filename, sr=self.samping_rate)
         return aud
     
