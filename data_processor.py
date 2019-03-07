@@ -100,7 +100,7 @@ class DataProcessor_TIMIT(object):
             
         return stft_all, labels
      
-    def all_speech_getter(self, n_epochs=10, max_time_steps=32):
+    def all_speech_getter(self, n_epochs=10, max_time_steps=16):
         """
         Iterable over all speech sequences.
         """

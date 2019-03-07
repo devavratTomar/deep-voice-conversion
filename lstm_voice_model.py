@@ -121,7 +121,7 @@ class DeepPhonemeModel(object):
     Implementation of Deep phoneme classifier using RNN.
     """
     
-    def __init__(self, batch_size=None, max_time_step=32):
+    def __init__(self, batch_size=None, max_time_step=16):
         
         tf.reset_default_graph()
         
@@ -222,7 +222,7 @@ class DeepPhoenemeModelTrainer(object):
         self.model = model
     
     def __get_optimizer(self, global_step):
-        optimizer = tf.train.AdamOptimizer(learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8)\
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.0001, beta1=0.9, beta2=0.999, epsilon=1e-8)\
                             .minimize(self.model.cost, global_step=global_step, var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rnn_model'))
                             
         return optimizer
@@ -245,8 +245,7 @@ class DeepPhoenemeModelTrainer(object):
         # add more summary as necessary
         tf.summary.scalar("loss", self.model.cost)
         self.summary_all = tf.summary.merge_all()
-        
-        
+
         init = tf.global_variables_initializer()
         output_path_abs = os.path.abspath(output_path)
         
@@ -272,9 +271,7 @@ class DeepPhoenemeModelTrainer(object):
         predictions = np.argmax(prediction_prob, axis=2)
         accuracy = np.sum(predictions == batch_speech_phonemes)/batch_speech_phonemes.size
         
-        logging.info("loss = {:.8f} accuracy = {:.2f}".format(cost, accuracy*100))
-        logging.info("predictions = {}".format(predictions))
-        logging.info("ground_truth = {}".format(batch_speech_phonemes))
+        logging.info("step: {}, loss = {:.8f} accuracy = {:.2f},\n predictions = {}, ground_truth = {}".format(step//1000, cost, accuracy*100, predictions, batch_speech_phonemes))
         summary_writer.add_summary(summary_str, step)
         summary_writer.flush()
         
@@ -284,6 +281,7 @@ class DeepPhoenemeModelTrainer(object):
               max_time_step,
               epochs=10,
               display_step=1,
+              model_save_step=1000,
               restore=False,
               write_graph=True):
         """
@@ -309,7 +307,8 @@ class DeepPhoenemeModelTrainer(object):
             if restore:
                 ckpt = tf.train.get_checkpoint_state(output_path)
                 if ckpt and ckpt.model_checkpoint_path:
-                    self.net.restore(sess, ckpt.model_checkpoint_path)
+                    logging.info("Model Restored!")
+                    self.model.restore(sess, ckpt.model_checkpoint_path)
                     
             
             summary_writer = tf.summary.FileWriter(output_path, graph=sess.graph)
@@ -318,6 +317,8 @@ class DeepPhoenemeModelTrainer(object):
             
             step_counter = 0
             for epoch in range(epochs):
+                logging.info("Epoch : {}".format(epoch))
+                
                 for speech in data_provider_train():
                     sess.run(self.model.initialize_state)
                     
@@ -341,10 +342,11 @@ class DeepPhoenemeModelTrainer(object):
                         if step_counter % display_step == 0:
                             self.output_mini_batch_stats(sess, summary_writer, step_counter, features, labels, seq_len)
                         
+                        if step_counter != 0 and step_counter % model_save_step == 0:
+                            save_path = self.model.save(sess, save_path)
+                        
                         step_counter += 1
-                
-                save_path = self.model.save(sess, save_path)
-            
+
             summary_writer.close()
         
         logging.info("Training Finished")
