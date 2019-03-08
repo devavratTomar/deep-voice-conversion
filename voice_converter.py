@@ -12,7 +12,46 @@ from config import CONFIG
 import utils
 import tensorflow as tf
 import logging
+import librosa
+import numpy as np
+import os
 
+def save_audio(original, converted, path='./test_cases/', name):
+    if not os.path.exists(path):
+        os.mkdir(path)
+    
+    librosa.output.write_wav(os.path.join(path, 'original_' + name + '.WAV'), original, 16000)
+    librosa.output.write_wav(os.path.join(path, 'converted_' + name + '.WAV'), converted, 16000)
+
+def generate_speech_from_features(audio_features, window_size=20, sampling_rate=16000, audio_phase=None):
+    window_len = sampling_rate*window_size//1000
+    hop_len = window_len//4
+    
+    #first axis is dummy
+    audio_features = np.exp(audio_features)
+    
+    if audio_phase:
+        audio_features_real = audio_features*np.cos(audio_phase)
+        audio_features_img = audio_features*np.sin(audio_phase)
+    
+    else:
+        audio_features_real = audio_features
+        audio_features_img = np.zeros_like(audio_features_real)
+    
+    audio_features_cmplx = np.complex(audio_features_real, audio_features_img)
+    
+    audio = librosa.istft(audio_features_cmplx, hop_length=hop_len, win_length=window_len)
+    
+    return audio
+
+def features_from_audio(audio, window_size=20, sampling_rate=16000):
+     window_len = sampling_rate*window_size//1000
+     stft_features = librosa.core.stft(audio, n_fft=window_len, win_length=window_len)
+     stft_log_mag = np.log(np.abs(stft_features))
+     stft_phase = np.angle(stft_features)
+     
+     return stft_log_mag.T, stft_phase.T
+     
 class VoiceConverter(object):
     """
     This class performs voice conversion using two trained models - 1. Speech recognition (e.g. phoneme classifier) 2. Speaker-embedder
@@ -26,6 +65,7 @@ class VoiceConverter(object):
     def __init__(self, phoneme_recognizer_model_path, speaker_embedder_model_path=None):
         self.pr_model_path = phoneme_recognizer_model_path
         self.se_model_path = speaker_embedder_model_path
+        self.is_model_restored = False
         
         
     def create_graphs(self, max_time_step):
@@ -36,10 +76,12 @@ class VoiceConverter(object):
         self.content_speech = tf.placeholder(tf.float32, [1, max_time_step, CONFIG.num_features], name='content_speech')
         self.content_seq_length = tf.placeholder(tf.int32, [1], name='seq_length')
         
+        initial_state = tf.contrib.rnn.LSTMStateTuple(tf.zeros([1, CONFIG.num_cell_dim]), tf.zeros([1, CONFIG.num_cell_dim]))
+        
         logits_content, self.layers_content = create_model_rnn(self.content_speech,
                                                                self.content_seq_length,
                                                                keep_prob=1.0,
-                                                               previous_state= tf.zeros([1, CONFIG.num_cell_dim], "float"),
+                                                               previous_state=initial_state,
                                                                reuse=False)
         
         #self.style_speech = tf.placeholder(tf.float32, [1, None, CONFIG.num_features])
@@ -48,7 +90,7 @@ class VoiceConverter(object):
         logits_gen_speech, self.layers_gen_speech = create_model_rnn(self.speech_gen,
                                                                      self.content_seq_length,
                                                                      keep_prob=1.0,
-                                                                     previous_state= tf.zeros([1, CONFIG.num_cell_dim]),
+                                                                     previous_state=initial_state,
                                                                      reuse=True)
         
         
@@ -72,10 +114,15 @@ class VoiceConverter(object):
         :param model_path: path to file system checkpoint location
         """
         #TODO: restore other model as well
-        saver = tf.train.Saver()
-        saver.restore(session, self.pr_model_path)
-        logging.info("Model restored from file: {}".format(self.pr_model_path))
-        
+        if not self.is_model_restored:
+            ckpt = tf.train.get_checkpoint_state(self.pr_model_path)
+            if ckpt and ckpt.model_checkpoint_path:
+                saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rnn_model'))
+                saver.restore(session,ckpt.model_checkpoint_path )
+                logging.info("Model restored from file: {}".format(self.pr_model_path))
+            
+            else:
+                raise Exception("Cannot load the model")
         
     def convert(self, content_speech, style_speech=None, max_iter = 1000):
         """
@@ -95,8 +142,23 @@ class VoiceConverter(object):
             self.restore(sess)
             
             for it in range(max_iter):
-                _, loss, speech_gen = sess.run((optimizer, self.cost, self.speech_gen))
+                _, loss, speech_gen = sess.run((optimizer, self.cost, self.speech_gen),
+                                               feed_dict= {
+                                                       self.content_speech:content_speech,
+                                                       self.content_seq_length:[max_time_step],
+                                                       })
                 logging.info("MSE: {}".format(loss))
-                
             
             return speech_gen
+        
+filename = './Dataset/TIMIT/TEST/DR6/FDRW0/SI653.WAV'
+test_audio, _ = librosa.load(filename, sr=16000)
+features_mg, featuers_angle = features_from_audio(test_audio)
+
+vc = VoiceConverter('./output_model')
+
+converted_speech_features = vc.convert(features_mg[np.newaxis, :, :])
+
+converted_audio = generate_speech_from_features(converted_speech_features[0].T, featuers_angle.T)
+
+save_audio(test_audio, converted_audio)

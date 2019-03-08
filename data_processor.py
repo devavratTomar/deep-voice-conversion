@@ -67,6 +67,7 @@ class DataProcessor_TIMIT(object):
         aud, sr = librosa.load(filename, sr=self.samping_rate)
         return aud
     
+    
     def create_feature_label_ts(self, label_seq, audio_seq, window_size=20):
         """
         label_seq should be 2D array where 1st column represent the start of phone, 2nd column represent end of phone
