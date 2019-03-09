@@ -16,7 +16,18 @@ import librosa
 import numpy as np
 import os
 
-def save_audio(original, converted, path='./test_cases/', name):
+def convert_save_audio(filename = './Dataset/TIMIT/TEST/DR6/FDRW0/SI653.WAV', model_path='./output_model'):
+    test_audio, _ = librosa.load(filename, sr=16000)
+    features_mg, featuers_angle = features_from_audio(test_audio)
+
+    vc = VoiceConverter(model_path)
+    converted_speech_features = vc.convert(features_mg[np.newaxis, :, :])
+    converted_audio = generate_speech_from_features(converted_speech_features[0].T)
+    
+    name = 'test_' + filename[filename.rfind('/') + 1, :]
+    save_audio(test_audio, converted_audio, name)
+
+def save_audio(original, converted, name, path='./test_cases/'):
     if not os.path.exists(path):
         os.mkdir(path)
     
@@ -38,8 +49,8 @@ def generate_speech_from_features(audio_features, window_size=20, sampling_rate=
         audio_features_real = audio_features
         audio_features_img = np.zeros_like(audio_features_real)
     
-    audio_features_cmplx = np.complex(audio_features_real, audio_features_img)
-    
+    audio_features_cmplx = audio_features_real + 1j*audio_features_img
+    print(audio_features_cmplx.shape)
     audio = librosa.istft(audio_features_cmplx, hop_length=hop_len, win_length=window_len)
     
     return audio
@@ -64,9 +75,7 @@ class VoiceConverter(object):
     
     def __init__(self, phoneme_recognizer_model_path, speaker_embedder_model_path=None):
         self.pr_model_path = phoneme_recognizer_model_path
-        self.se_model_path = speaker_embedder_model_path
-        self.is_model_restored = False
-        
+        self.se_model_path = speaker_embedder_model_path        
         
     def create_graphs(self, max_time_step):
         #TODO: create the two graphs on separate gpus
@@ -102,7 +111,7 @@ class VoiceConverter(object):
     
     
     def __get_optimizer(self, global_step):
-        optimizer = tf.train.AdamOptimizer(learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8)\
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8)\
                             .minimize(self.cost, global_step=global_step, var_list=[self.speech_gen])
                             
         return optimizer
@@ -114,17 +123,19 @@ class VoiceConverter(object):
         :param model_path: path to file system checkpoint location
         """
         #TODO: restore other model as well
-        if not self.is_model_restored:
-            ckpt = tf.train.get_checkpoint_state(self.pr_model_path)
-            if ckpt and ckpt.model_checkpoint_path:
-                saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rnn_model'))
-                saver.restore(session,ckpt.model_checkpoint_path )
-                logging.info("Model restored from file: {}".format(self.pr_model_path))
-            
-            else:
-                raise Exception("Cannot load the model")
+        ckpt = tf.train.get_checkpoint_state(self.pr_model_path)
+        if ckpt and ckpt.model_checkpoint_path:
+            saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rnn_model'), restore_sequentially=True)
+            saver.restore(session, ckpt.model_checkpoint_path )
+            logging.info("Model restored from file: {}".format(self.pr_model_path))
         
-    def convert(self, content_speech, style_speech=None, max_iter = 1000):
+        else:
+            raise Exception("Cannot load the model")
+    
+    def output_logs(self, mse, step):
+        logging.info("Step: {}, MSE: {}".format(step, mse))
+        
+    def convert(self, content_speech, style_speech=None, max_iter = 100):
         """
         content_speech should be of the shape [1, max_time, num_features]
         """
@@ -140,25 +151,15 @@ class VoiceConverter(object):
         with tf.Session() as sess:
             sess.run(init)
             self.restore(sess)
-            
             for it in range(max_iter):
                 _, loss, speech_gen = sess.run((optimizer, self.cost, self.speech_gen),
                                                feed_dict= {
                                                        self.content_speech:content_speech,
                                                        self.content_seq_length:[max_time_step],
                                                        })
-                logging.info("MSE: {}".format(loss))
+                self.output_logs(loss, it)
             
             return speech_gen
         
-filename = './Dataset/TIMIT/TEST/DR6/FDRW0/SI653.WAV'
-test_audio, _ = librosa.load(filename, sr=16000)
-features_mg, featuers_angle = features_from_audio(test_audio)
-
-vc = VoiceConverter('./output_model')
-
-converted_speech_features = vc.convert(features_mg[np.newaxis, :, :])
-
-converted_audio = generate_speech_from_features(converted_speech_features[0].T, featuers_angle.T)
-
-save_audio(test_audio, converted_audio)
+        
+    convert_save_audio()
