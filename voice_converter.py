@@ -16,16 +16,7 @@ import librosa
 import numpy as np
 import os
 
-def convert_save_audio(filename = './Dataset/TIMIT/TEST/DR6/FDRW0/SI653.WAV', model_path='./output_model'):
-    test_audio, _ = librosa.load(filename, sr=16000)
-    features_mg, featuers_angle = features_from_audio(test_audio)
-
-    vc = VoiceConverter(model_path)
-    converted_speech_features = vc.convert(features_mg[np.newaxis, :, :])
-    converted_audio = generate_speech_from_features(converted_speech_features[0].T)
-    
-    name = 'test_' + filename[filename.rfind('/') + 1, :]
-    save_audio(test_audio, converted_audio, name)
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 def save_audio(original, converted, name, path='./test_cases/'):
     if not os.path.exists(path):
@@ -34,20 +25,15 @@ def save_audio(original, converted, name, path='./test_cases/'):
     librosa.output.write_wav(os.path.join(path, 'original_' + name + '.WAV'), original, 16000)
     librosa.output.write_wav(os.path.join(path, 'converted_' + name + '.WAV'), converted, 16000)
 
-def generate_speech_from_features(audio_features, window_size=20, sampling_rate=16000, audio_phase=None):
+def generate_speech_from_features(audio_features, audio_phase, window_size=20, sampling_rate=16000):
     window_len = sampling_rate*window_size//1000
     hop_len = window_len//4
     
     #first axis is dummy
     audio_features = np.exp(audio_features)
-    
-    if audio_phase:
-        audio_features_real = audio_features*np.cos(audio_phase)
-        audio_features_img = audio_features*np.sin(audio_phase)
-    
-    else:
-        audio_features_real = audio_features
-        audio_features_img = np.zeros_like(audio_features_real)
+    print('max val = {}, min val = {}'.format(np.max(audio_features), np.min(audio_features)))
+    audio_features_real = audio_features*np.cos(audio_phase)
+    audio_features_img = audio_features*np.sin(audio_phase)
     
     audio_features_cmplx = audio_features_real + 1j*audio_features_img
     print(audio_features_cmplx.shape)
@@ -111,7 +97,7 @@ class VoiceConverter(object):
     
     
     def __get_optimizer(self, global_step):
-        optimizer = tf.train.AdamOptimizer(learning_rate=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8)\
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8)\
                             .minimize(self.cost, global_step=global_step, var_list=[self.speech_gen])
                             
         return optimizer
@@ -133,9 +119,9 @@ class VoiceConverter(object):
             raise Exception("Cannot load the model")
     
     def output_logs(self, mse, step):
-        logging.info("Step: {}, MSE: {}".format(step, mse))
+        print("Step: {}, MSE: {}".format(step, mse))
         
-    def convert(self, content_speech, style_speech=None, max_iter = 100):
+    def convert(self, content_speech, style_speech=None, max_iter=100):
         """
         content_speech should be of the shape [1, max_time, num_features]
         """
@@ -150,6 +136,7 @@ class VoiceConverter(object):
         
         with tf.Session() as sess:
             sess.run(init)
+            sess.run(tf.assign(self.speech_gen, content_speech + np.random.normal(scale=1.0, size=content_speech.shape)))
             self.restore(sess)
             for it in range(max_iter):
                 _, loss, speech_gen = sess.run((optimizer, self.cost, self.speech_gen),
@@ -161,5 +148,13 @@ class VoiceConverter(object):
             
             return speech_gen
         
-        
-    convert_save_audio()
+def convert_save_audio(filename = './Dataset/TIMIT/TEST/DR6/FDRW0/SI653.WAV', model_path='./output_model'):
+    test_audio, _ = librosa.load(filename, sr=16000)
+    features_mg, features_angle = features_from_audio(test_audio)
+    vc = VoiceConverter(model_path)
+    converted_speech_features = vc.convert(features_mg[np.newaxis, :, :])
+    converted_audio = generate_speech_from_features(converted_speech_features[0].T, features_angle.T)
+    name = 'test_' + filename[(filename.rfind('/') + 1):]
+    save_audio(test_audio, converted_audio, name)
+
+convert_save_audio()
