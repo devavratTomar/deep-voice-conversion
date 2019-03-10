@@ -90,8 +90,7 @@ class DataProcessor_TIMIT(object):
         
         stft_features = librosa.core.stft(audio_seq, n_fft=window_len, win_length=window_len)
         
-        #stft_all = np.concatenate([np.real(stft_features), np.imag(stft_features)], axis=0)
-        stft_all = np.log(np.abs(stft_features))
+        stft_all = np.concatenate([np.real(stft_features), np.imag(stft_features)], axis=0)
         
         labels = np.zeros(stft_all.shape[1])
         

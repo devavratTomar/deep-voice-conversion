@@ -25,15 +25,15 @@ def save_audio(original, converted, name, path='./test_cases/'):
     librosa.output.write_wav(os.path.join(path, 'original_' + name + '.WAV'), original, 16000)
     librosa.output.write_wav(os.path.join(path, 'converted_' + name + '.WAV'), converted, 16000)
 
-def generate_speech_from_features(audio_features, audio_phase, window_size=20, sampling_rate=16000):
+def generate_speech_from_features(audio_features, window_size=20, sampling_rate=16000):
     window_len = sampling_rate*window_size//1000
     hop_len = window_len//4
+    num_features = audio_features.shape[0]//2
     
     #first axis is dummy
-    audio_features = np.exp(audio_features)
+    audio_features_real = audio_features[:num_features, :]
+    audio_features_img = audio_features[num_features:, :]
     print('max val = {}, min val = {}'.format(np.max(audio_features), np.min(audio_features)))
-    audio_features_real = audio_features*np.cos(audio_phase)
-    audio_features_img = audio_features*np.sin(audio_phase)
     
     audio_features_cmplx = audio_features_real + 1j*audio_features_img
     print(audio_features_cmplx.shape)
@@ -43,11 +43,8 @@ def generate_speech_from_features(audio_features, audio_phase, window_size=20, s
 
 def features_from_audio(audio, window_size=20, sampling_rate=16000):
      window_len = sampling_rate*window_size//1000
-     stft_features = librosa.core.stft(audio, n_fft=window_len, win_length=window_len)
-     stft_log_mag = np.log(np.abs(stft_features))
-     stft_phase = np.angle(stft_features)
-     
-     return stft_log_mag.T, stft_phase.T
+     stft_features = librosa.core.stft(audio, n_fft=window_len, win_length=window_len)     
+     return np.concatenate([np.real(stft_features), np.imag(stft_features)], axis=0).T
      
 class VoiceConverter(object):
     """
