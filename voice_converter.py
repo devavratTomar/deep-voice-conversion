@@ -147,10 +147,10 @@ class VoiceConverter(object):
         
 def convert_save_audio(filename = './Dataset/TIMIT/TEST/DR6/FDRW0/SI653.WAV', model_path='./output_model'):
     test_audio, _ = librosa.load(filename, sr=16000)
-    features_mg, features_angle = features_from_audio(test_audio)
+    features_audio = features_from_audio(test_audio)
     vc = VoiceConverter(model_path)
-    converted_speech_features = vc.convert(features_mg[np.newaxis, :, :])
-    converted_audio = generate_speech_from_features(converted_speech_features[0].T, features_angle.T)
+    converted_speech_features = vc.convert(features_audio[np.newaxis, :, :])
+    converted_audio = generate_speech_from_features(converted_speech_features[0].T)
     name = 'test_' + filename[(filename.rfind('/') + 1):]
     save_audio(test_audio, converted_audio, name)
 
