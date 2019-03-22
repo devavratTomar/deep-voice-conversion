@@ -86,15 +86,15 @@ class VoiceConverter(object):
                                                                      reuse=True)
         
         
-        self.cost = self.__get_cost(self.layers_content['rnn_output'], self.layers_gen_speech['rnn_output'])
-        
+        self.cost = self.__get_cost([self.layers_content['rnn_output'], self.layers_content['layer_3'], self.layers_content['layer_6']], [self.layers_gen_speech['rnn_output'], self.layers_gen_speech['layer_3'], self.layers_gen_speech['layer_6']])
+
         
     def __get_cost(self, features_content, features_gen, embedding_gen=None, embedding_style=None):
-        return tf.losses.mean_squared_error(features_content, features_gen)
+        return tf.losses.mean_squared_error(features_content[0], features_gen[0]) + tf.losses.mean_squared_error(features_content[1], features_gen[1]) + tf.losses.mean_squared_error(features_content[2], features_content[2])
     
     
     def __get_optimizer(self, global_step):
-        optimizer = tf.train.AdamOptimizer(learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8)\
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.01, beta1=0.9, beta2=0.999, epsilon=1e-8)\
                             .minimize(self.cost, global_step=global_step, var_list=[self.speech_gen])
                             
         return optimizer
@@ -133,7 +133,7 @@ class VoiceConverter(object):
         
         with tf.Session() as sess:
             sess.run(init)
-            sess.run(tf.assign(self.speech_gen, content_speech + np.random.normal(scale=1.0, size=content_speech.shape)))
+            #sess.run(tf.assign(self.speech_gen, content_speech + np.random.normal(scale=1.0, size=content_speech.shape)))
             self.restore(sess)
             for it in range(max_iter):
                 _, loss, speech_gen = sess.run((optimizer, self.cost, self.speech_gen),
@@ -147,7 +147,7 @@ class VoiceConverter(object):
         
 def convert_save_audio(filename = './Dataset/TIMIT/TEST/DR6/FDRW0/SI653.WAV', model_path='./output_model'):
     test_audio, _ = librosa.load(filename, sr=16000)
-    features_audio = features_from_audio(test_audio)
+    features_audio = features_from_audio(test_audio/np.max(np.abs(test_audio)))
     vc = VoiceConverter(model_path)
     converted_speech_features = vc.convert(features_audio[np.newaxis, :, :])
     converted_audio = generate_speech_from_features(converted_speech_features[0].T)

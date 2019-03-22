@@ -53,7 +53,7 @@ class DataProcessor_TIMIT(object):
         self.samping_rate = sampling_rate
     
     
-    def read_phones(self, filename):
+    def __read_phones(self, filename):
         with open(filename) as f:
             lines = f.readlines()
             
@@ -63,9 +63,11 @@ class DataProcessor_TIMIT(object):
             data.append(line)
         return np.array(data)
     
-    def read_audio(self, filename):
+    def __read_audio(self, filename):
         aud, sr = librosa.load(filename, sr=self.samping_rate)
-        return aud
+        #normalization
+        max_abs_value = np.max(np.abs(aud))
+        return aud/max_abs_value
     
     
     def create_feature_label_ts(self, label_seq, audio_seq, window_size=20):
@@ -100,7 +102,7 @@ class DataProcessor_TIMIT(object):
             
         return stft_all, labels
      
-    def all_speech_getter(self, n_epochs=10, max_time_steps=16):
+    def all_speech_getter(self, n_epochs=1, max_time_steps=16):
         """
         Iterable over all speech sequences.
         """

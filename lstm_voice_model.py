@@ -182,7 +182,7 @@ class DeepPhoenemeModelTrainer(object):
               output_path,
               keep_prob,
               max_time_step,
-              epochs=10,
+              epochs=5,
               display_step=1,
               model_save_step=1000,
               restore=False,
