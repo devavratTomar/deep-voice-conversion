@@ -25,9 +25,7 @@ class DeepPhonemeModel(object):
     """
     
     def __init__(self, batch_size=None, max_time_step=16):
-        
         tf.reset_default_graph()
-        
         self.input_speech = tf.placeholder(tf.float32, [batch_size, max_time_step if max_time_step> 0 else None , CONFIG.num_features], name='input_speech')
         self.seq_length = tf.placeholder(tf.int32, [batch_size], name='seq_length')
         
@@ -57,7 +55,6 @@ class DeepPhonemeModel(object):
             logits = tf.identity(logits, name='logits')
         
         self.phoneme_prob = tf.nn.softmax(logits)
-        
         self.cost = self.__get_cost(logits)
         
     def __get_cost(self, logits):

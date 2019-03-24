@@ -15,9 +15,53 @@ First 2 layers are non recurrent which extract features from the spectrum of spe
 import tensorflow as tf
 import utils
 from config import CONFIG
+from config import CONFIG_EMBED
 
-def create_speaker_embedder_model():
-    pass
+
+def get_rnn(inputs, seq_length, reuse, scope, num_layers=3):
+    with tf.variable_scope(scope, reuse=reuse):
+        lstm_cells = [tf.contrib.rnn.LSTMCell(num_units=CONFIG_EMBED.num_rnn_hidden, num_proj=CONFIG_EMBED.num_proj) for i in range(num_layers)]
+        lstm = tf.contrib.rnn.MultiRNNCell(lstm_cells)    # define lstm op and variables
+        outputs, _ = tf.nn.dynamic_rnn(cell=lstm, inputs=inputs, sequence_length=seq_length, dtype=tf.float32, time_major=True)    
+        return outputs
+            
+def create_speaker_embedder_model(input_speech, seq_length, keep_prob, reuse=False):
+    # implementing GE2E loss for speaker embedding
+    # input_speech shape [batch_size, max_time_step, num_features]
+    
+    batch_size = tf.shape(input_speech)[0]
+    max_time_step = tf.shape(input_speech)[1]
+    
+    with tf.variable_scope('embedding_model', reuse=reuse):
+        with tf.name_scope('input_speech'):
+            input_data = tf.transpose(input_speech, [1, 0, 2])
+            
+            #Reshaping input_data for 1st layer which is not recurrent
+            input_data = tf.reshape(input_data, [-1, CONFIG_EMBED.num_features])
+            
+            # layer 1:
+            b1 = utils.get_variable('b1',[CONFIG_EMBED.num_hidden_1], tf.zeros_initializer())
+            h1 = utils.get_variable('h1', [CONFIG_EMBED.num_features, CONFIG_EMBED.num_hidden_1], tf.contrib.layers.xavier_initializer())
+            layer_1 = tf.minimum(tf.nn.relu(tf.add(tf.matmul(input_data, h1), b1)), CONFIG_EMBED.relu_clip)
+            
+            layer_1 = tf.nn.dropout(layer_1, keep_prob=keep_prob)
+            
+            # layer 2:
+            # rnn layers
+            # need to reshape layer_1 back to [max_time_step, batch_size, featuers]
+            layer_1 = tf.reshape(layer_1, [-1, batch_size, CONFIG_EMBED.num_hidden_1])
+            
+            #change the output shape from [max_time_step, batch_size, features] to [batch_size, max_time_step, features]
+            output_rnn = get_rnn(layer_1, seq_length, reuse, 'embedding_model')
+            output_rnn = tf.transpose(output_rnn, [0, 1, 2])
+            
+            # get the last relevent output
+            index = tf.range(0, batch_size)*max_time_step + (seq_length - 1)
+            flat = tf.reshape(output_rnn, [-1, CONFIG_EMBED.num_proj])
+            output = tf.gather(flat, index)
+            
+            # output is of size [batch_size, num_embedding_features]
+            return utils.normalize(output, axis=1)
 
 def create_model_rnn(input_speech, seq_length, keep_prob, previous_state=None, reuse=False):
     """
@@ -47,7 +91,7 @@ def create_model_rnn(input_speech, seq_length, keep_prob, previous_state=None, r
             # layer 1:
             b1 = utils.get_variable('b1', [CONFIG.num_hidden_1], tf.zeros_initializer())
             h1 = utils.get_variable('h1', [CONFIG.num_features, CONFIG.num_hidden_1], tf.contrib.layers.xavier_initializer())
-            layer_1 = tf.minimum(tf.nn.leaky_relu(tf.add(tf.matmul(input_data, h1), b1)), CONFIG.relu_clip)
+            layer_1 = tf.minimum(tf.nn.relu(tf.add(tf.matmul(input_data, h1), b1)), CONFIG.relu_clip)
             
             layer_1 = tf.nn.dropout(layer_1, keep_prob=keep_prob)
             layers['layer_1'] = layer_1
@@ -90,7 +134,7 @@ def create_model_rnn(input_speech, seq_length, keep_prob, previous_state=None, r
             b5 = utils.get_variable('b5', CONFIG.num_hidden_5, tf.zeros_initializer())
             h5 = utils.get_variable('h5', [CONFIG.num_cell_dim, CONFIG.num_hidden_5],  tf.contrib.layers.xavier_initializer())
             
-            layer_5 = tf.minimum(tf.nn.leaky_relu(tf.add(tf.matmul(output, h5), b5)), CONFIG.relu_clip)
+            layer_5 = tf.minimum(tf.nn.relu(tf.add(tf.matmul(output, h5), b5)), CONFIG.relu_clip)
             layer_5 = tf.nn.dropout(layer_5, keep_prob=keep_prob)
             
             # Now we muliply layer 5 with matrix h6 and add bias b6 to get phoneme class logits

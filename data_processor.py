@@ -10,6 +10,7 @@ import random
 import numpy as np
 import librosa
 import math
+from config import CONFIG
 
 TIMIT_PHONE_DICTIONARY = {
         'iy':0, 'ch':21, 'en':42,
@@ -51,7 +52,15 @@ class DataProcessor_TIMIT(object):
         self.directory = os.path.abspath(path)
         self.dialects = [dialect_name for dialect_name in os.listdir(self.directory)]
         self.samping_rate = sampling_rate
-    
+        self.all_speakers = self.__get_all_speakers()
+        
+        
+    def __get_all_speakers(self):
+        speakers = []
+        for dialect in self.dialects:
+            speaker_path_base = os.path.join(self.directory, dialect)
+            speakers = speakers + [os.path.join(dialect, speaker) for speaker in os.listdir(speaker_path_base)]
+        return speakers
     
     def __read_phones(self, filename):
         with open(filename) as f:
@@ -69,7 +78,13 @@ class DataProcessor_TIMIT(object):
         max_abs_value = np.max(np.abs(aud))
         return aud/max_abs_value
     
-    
+    def create_features(self, audio_seq, window_size=20):
+        window_len = self.samping_rate*window_size//1000
+        
+        stft_features = librosa.core.stft(audio_seq, n_fft=window_len, win_length=window_len)
+        stft_all = np.concatenate([np.real(stft_features), np.imag(stft_features)], axis=0)
+        return stft_all.T
+        
     def create_feature_label_ts(self, label_seq, audio_seq, window_size=20):
         """
         label_seq should be 2D array where 1st column represent the start of phone, 2nd column represent end of phone
@@ -82,7 +97,6 @@ class DataProcessor_TIMIT(object):
         
         label_seq_start = label_seq[:, 0].astype(int)
         label_codes = label_seq[:, 2]
-        
         #clip audio to start and end mark
         audio_seq = audio_seq[label_seq_start[0]: label_seq[:,1].astype(int)[-1]]
         label_seq_start = label_seq_start - label_seq_start[0]
@@ -101,7 +115,32 @@ class DataProcessor_TIMIT(object):
             labels[t] = TIMIT_PHONE_DICTIONARY[label_codes[arg_label]]
             
         return stft_all, labels
-     
+    
+    def speaker_embedding_getter(self, n_epochs=1, N=16, M=10, max_time_steps=1600):
+        """
+        Iterable to get batch of M samples from N speakers
+        """
+        random.shuffle(self.all_speakers)
+        num_batches = math.ceil(len(self.all_speakers)/N)
+        
+        #append starting speakers if num_batches*N is not equal to number of speakers
+        all_speakers = self.all_speakers + self.all_speakers[0:(num_batches*N - len(self.all_speakers))]
+        
+        for epoch in range(n_epochs):
+            for batch_iter in range(num_batches):
+                speaker_batch = all_speakers[batch_iter*N : (batch_iter+1)*N]
+                speakers_sample_data = np.zeros((N*M, max_time_steps, CONFIG.num_features), dtype=float)
+                seq_length = np.zeros(N*M, dtype=int)
+                
+                for j, speaker in enumerate(speaker_batch):
+                    samples = [f for f in os.listdir(os.path.join(self.directory, speaker)) if f.endswith('WAV')]
+                    random.shuffle(samples)
+                    for i, sample in enumerate(samples):
+                        features = self.create_features(self.__read_audio(os.path.join(self.directory, speaker, sample)))
+                        seq_length[j*M + i] = features.shape[0]
+                        speakers_sample_data[j*M + i, 0:features.shape[0], :] = features
+                
+                yield speakers_sample_data, seq_length
     def all_speech_getter(self, n_epochs=1, max_time_steps=16):
         """
         Iterable over all speech sequences.
