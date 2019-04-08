@@ -23,5 +23,5 @@ def append_zeros(data, new_size, axis):
     return np.concatenate((data, append_data), axis=axis)
 
 
-def normalize(data, axis):
-    return tf.div(data, tf.norm(data, axis=axis, keep_dims=True) + 1e-6)
+def normalize(x, axis):
+    return x/tf.sqrt(tf.reduce_sum(x**2, axis=-1, keep_dims=True)+1e-6)

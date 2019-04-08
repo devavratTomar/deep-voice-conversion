@@ -116,7 +116,7 @@ class DataProcessor_TIMIT(object):
             
         return stft_all, labels
     
-    def speaker_embedding_getter(self, n_epochs=1, N=16, M=10, max_time_steps=1600):
+    def speaker_embedding_getter(self, n_epochs=1, N=10, M=10, max_time_steps=1000):
         """
         Iterable to get batch of M samples from N speakers
         """
@@ -137,8 +137,8 @@ class DataProcessor_TIMIT(object):
                     random.shuffle(samples)
                     for i, sample in enumerate(samples):
                         features = self.create_features(self.__read_audio(os.path.join(self.directory, speaker, sample)))
-                        seq_length[j*M + i] = features.shape[0]
-                        speakers_sample_data[j*M + i, 0:features.shape[0], :] = features
+                        seq_length[j*M + i] = min(features.shape[0], max_time_steps)
+                        speakers_sample_data[j*M + i, 0:seq_length[j*M + i], :] = features[0:seq_length[j*M + i], :]
                 
                 yield speakers_sample_data, seq_length
     def all_speech_getter(self, n_epochs=1, max_time_steps=16):

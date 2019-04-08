@@ -33,7 +33,7 @@ CONFIG_EMBED = Config()
 CONFIG_EMBED._config = {
         'relu_clip':20,
         'num_features':322,
-        'num_hidden_1':786,
+        'num_hidden_1':128,
         'num_rnn_hidden':786,
         'num_proj':256
         }

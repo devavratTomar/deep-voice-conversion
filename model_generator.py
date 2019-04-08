@@ -42,8 +42,7 @@ def create_speaker_embedder_model(input_speech, seq_length, keep_prob, reuse=Fal
             # layer 1:
             b1 = utils.get_variable('b1',[CONFIG_EMBED.num_hidden_1], tf.zeros_initializer())
             h1 = utils.get_variable('h1', [CONFIG_EMBED.num_features, CONFIG_EMBED.num_hidden_1], tf.contrib.layers.xavier_initializer())
-            layer_1 = tf.minimum(tf.nn.relu(tf.add(tf.matmul(input_data, h1), b1)), CONFIG_EMBED.relu_clip)
-            
+            layer_1 = tf.nn.tanh(tf.add(tf.matmul(input_data, h1), b1))
             layer_1 = tf.nn.dropout(layer_1, keep_prob=keep_prob)
             
             # layer 2:
@@ -53,13 +52,12 @@ def create_speaker_embedder_model(input_speech, seq_length, keep_prob, reuse=Fal
             
             #change the output shape from [max_time_step, batch_size, features] to [batch_size, max_time_step, features]
             output_rnn = get_rnn(layer_1, seq_length, reuse, 'embedding_model')
-            output_rnn = tf.transpose(output_rnn, [0, 1, 2])
+            output_rnn = tf.transpose(output_rnn, [1, 0, 2])
             
             # get the last relevent output
             index = tf.range(0, batch_size)*max_time_step + (seq_length - 1)
             flat = tf.reshape(output_rnn, [-1, CONFIG_EMBED.num_proj])
             output = tf.gather(flat, index)
-            
             # output is of size [batch_size, num_embedding_features]
             return utils.normalize(output, axis=1)
 
