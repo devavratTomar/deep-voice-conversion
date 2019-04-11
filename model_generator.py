@@ -42,7 +42,7 @@ def create_speaker_embedder_model(input_speech, seq_length, keep_prob, reuse=Fal
             # layer 1:
             b1 = utils.get_variable('b1',[CONFIG_EMBED.num_hidden_1], tf.zeros_initializer())
             h1 = utils.get_variable('h1', [CONFIG_EMBED.num_features, CONFIG_EMBED.num_hidden_1], tf.contrib.layers.xavier_initializer())
-            layer_1 = tf.nn.tanh(tf.add(tf.matmul(input_data, h1), b1))
+            layer_1 = tf.minimum(tf.nn.relu(tf.add(tf.matmul(input_data, h1), b1)), 20)
             layer_1 = tf.nn.dropout(layer_1, keep_prob=keep_prob)
             
             # layer 2:

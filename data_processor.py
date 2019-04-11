@@ -10,7 +10,7 @@ import random
 import numpy as np
 import librosa
 import math
-from config import CONFIG
+from config import CONFIG, CONFIG_EMBED
 
 TIMIT_PHONE_DICTIONARY = {
         'iy':0, 'ch':21, 'en':42,
@@ -74,15 +74,18 @@ class DataProcessor_TIMIT(object):
     
     def __read_audio(self, filename):
         aud, sr = librosa.load(filename, sr=self.samping_rate)
-        #normalization
-        max_abs_value = np.max(np.abs(aud))
-        return aud/max_abs_value
+        return aud
     
+    def create_features_mfcc(self, audio_seq):
+        mfccs = librosa.feature.mfcc(y=audio_seq, sr=self.samping_rate, n_mfcc=40)
+        return mfccs.T
+
     def create_features(self, audio_seq, window_size=20):
         window_len = self.samping_rate*window_size//1000
         
         stft_features = librosa.core.stft(audio_seq, n_fft=window_len, win_length=window_len)
         stft_all = np.concatenate([np.real(stft_features), np.imag(stft_features)], axis=0)
+        stft_all = np.sign(stft_all)*np.log(np.abs(stft_all) + 1.0)
         return stft_all.T
         
     def create_feature_label_ts(self, label_seq, audio_seq, window_size=20):
@@ -116,7 +119,7 @@ class DataProcessor_TIMIT(object):
             
         return stft_all, labels
     
-    def speaker_embedding_getter(self, n_epochs=1, N=10, M=10, max_time_steps=1000):
+    def speaker_embedding_getter(self, n_epochs=1, N=10, M=10, max_time_steps=250):
         """
         Iterable to get batch of M samples from N speakers
         """
@@ -129,14 +132,14 @@ class DataProcessor_TIMIT(object):
         for epoch in range(n_epochs):
             for batch_iter in range(num_batches):
                 speaker_batch = all_speakers[batch_iter*N : (batch_iter+1)*N]
-                speakers_sample_data = np.zeros((N*M, max_time_steps, CONFIG.num_features), dtype=float)
+                speakers_sample_data = np.zeros((N*M, max_time_steps, CONFIG_EMBED.num_features), dtype=float)
                 seq_length = np.zeros(N*M, dtype=int)
                 
                 for j, speaker in enumerate(speaker_batch):
                     samples = [f for f in os.listdir(os.path.join(self.directory, speaker)) if f.endswith('WAV')]
                     random.shuffle(samples)
                     for i, sample in enumerate(samples):
-                        features = self.create_features(self.__read_audio(os.path.join(self.directory, speaker, sample)))
+                        features = self.create_features_mfcc(self.__read_audio(os.path.join(self.directory, speaker, sample)))
                         seq_length[j*M + i] = min(features.shape[0], max_time_steps)
                         speakers_sample_data[j*M + i, 0:seq_length[j*M + i], :] = features[0:seq_length[j*M + i], :]
                 
