@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
 
 class DeepSpeakerEmbedder:
     #we keep batch size as number of speakers*numberofsamples
-    def __init__(self, num_speakers=10, num_samples=10, max_time_step=250):
+    def __init__(self, num_speakers=30, num_samples=10, max_time_step=250):
         
         tf.reset_default_graph()
         batch_size = num_speakers*num_samples
@@ -30,7 +30,7 @@ class DeepSpeakerEmbedder:
         self.seq_length = tf.placeholder(tf.int32, [batch_size], name='seq_length')
         self.keep_prob = tf.placeholder(tf.float32, name="dropout_prob")
         
-        self.embeddings = create_speaker_embedder_model(self.speech_data, self.seq_length, self.keep_prob)
+        self.embeddings, self.attentions = create_speaker_embedder_model(self.speech_data, self.seq_length, self.keep_prob)
         self.cost = self.__get_cost(self.embeddings, num_speakers, num_samples)
     
     def __get_cost(self, embeddings, num_speakers, num_samples):
@@ -51,7 +51,7 @@ class DeepSpeakerEmbedder:
         S = tf.abs(w)*S + b
         S_correct = tf.concat([S[i*num_samples:(i+1)*num_samples, i:(i+1)] for i in range(num_speakers)], axis=0)
         
-        return -tf.reduce_sum(S_correct-tf.log(tf.reduce_sum(tf.exp(S), axis=1, keep_dims=True) + 1e-6))
+        return -tf.reduce_mean(S_correct-tf.log(tf.reduce_sum(tf.exp(S), axis=1, keep_dims=True) + 1e-6))
     
     
     def save(self, sess, model_path):
@@ -80,7 +80,7 @@ class DeepSpeakerModelTrainer():
     def __init__(self, model):
         self.model = model
         
-    def __get_optimizer(self, global_step, lr=1e-2):
+    def __get_optimizer(self, global_step, lr=1e-3):
         optimizer = tf.train.AdamOptimizer(learning_rate=lr, beta1=0.9, beta2=0.999, epsilon=1e-8)
         return optimizer
     
@@ -101,6 +101,8 @@ class DeepSpeakerModelTrainer():
         grads_model, vars_model = zip(*optimizer.compute_gradients(self.model.cost, var_list=vars_model))
         grads_model = tf.clip_by_global_norm(grads_model, 3.0)[0]
         
+        self.grads_model = grads_model
+        
         vars_cost = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='cost_var')
         grads_cost, vars_cost = zip(*optimizer.compute_gradients(self.model.cost, var_list=vars_cost))
         
@@ -110,7 +112,7 @@ class DeepSpeakerModelTrainer():
         vars_all = vars_model + vars_cost
         grads_all = grads_model + grads_cost
         
-        self.train_op = optimizer.apply_gradients(zip(grads_model, vars_model), global_step=global_step)
+        self.train_op = optimizer.apply_gradients(zip(grads_all, vars_all), global_step=global_step)
         
         # add more summary as necessary
         tf.summary.scalar("loss", self.model.cost)
@@ -131,11 +133,12 @@ class DeepSpeakerModelTrainer():
         return init
     
     def output_mini_batch_stats(self, session, summary_writer, step, batch_speech, batch_speech_seq_length):
-        summary_str, outputs, cost = session.run((self.summary_all, self.model.embeddings, self.model.cost),
-                                                         feed_dict= {self.model.speech_data: batch_speech,
-                                                                     self.model.seq_length: batch_speech_seq_length,
-                                                                     self.model.keep_prob: 1.0})
-        logging.info("step: {}, loss = {:.8f}, \noutput: {}".format(step, cost, outputs))
+        summary_str, sh, cost = session.run((self.summary_all, self.model.embeddings, self.model.cost),
+                                        feed_dict= {self.model.speech_data: batch_speech,
+                                                    self.model.seq_length: batch_speech_seq_length,
+                                                    self.model.keep_prob: 1.0})
+        
+        logging.info("step: {}, loss = {:.8f}, sh: {}".format(step, cost, sh.shape))
         summary_writer.add_summary(summary_str, step)
         summary_writer.flush()
         

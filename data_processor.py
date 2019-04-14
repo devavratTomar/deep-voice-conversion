@@ -119,7 +119,7 @@ class DataProcessor_TIMIT(object):
             
         return stft_all, labels
     
-    def speaker_embedding_getter(self, n_epochs=1, N=10, M=10, max_time_steps=250):
+    def speaker_embedding_getter(self, n_epochs=1, N=30, M=10, max_time_steps=250):
         """
         Iterable to get batch of M samples from N speakers
         """

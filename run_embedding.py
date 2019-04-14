@@ -18,4 +18,4 @@ dp = DataProcessor_TIMIT()
 rnn_model = DeepSpeakerEmbedder()
 
 trainer = DeepSpeakerModelTrainer(rnn_model)
-trainer.train(dp.speaker_embedding_getter, './output_model_embedder', 0.9, 16, 50, 1, model_save_step=10, restore=False)
+trainer.train(dp.speaker_embedding_getter, './output_model_embedder', 0.8, 16, 50, 1, model_save_step=10, restore=False)

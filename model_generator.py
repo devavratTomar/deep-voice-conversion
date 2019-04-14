@@ -16,15 +16,14 @@ import tensorflow as tf
 import utils
 from config import CONFIG
 from config import CONFIG_EMBED
-
-
+    
 def get_rnn(inputs, seq_length, reuse, scope, num_layers=3):
     with tf.variable_scope(scope, reuse=reuse):
         lstm_cells = [tf.contrib.rnn.LSTMCell(num_units=CONFIG_EMBED.num_rnn_hidden, num_proj=CONFIG_EMBED.num_proj) for i in range(num_layers)]
         lstm = tf.contrib.rnn.MultiRNNCell(lstm_cells)    # define lstm op and variables
         outputs, _ = tf.nn.dynamic_rnn(cell=lstm, inputs=inputs, sequence_length=seq_length, dtype=tf.float32, time_major=True)    
         return outputs
-            
+
 def create_speaker_embedder_model(input_speech, seq_length, keep_prob, reuse=False):
     # implementing GE2E loss for speaker embedding
     # input_speech shape [batch_size, max_time_step, num_features]
@@ -32,34 +31,60 @@ def create_speaker_embedder_model(input_speech, seq_length, keep_prob, reuse=Fal
     batch_size = tf.shape(input_speech)[0]
     max_time_step = tf.shape(input_speech)[1]
     
+    def get_attention_mask(seq_length):
+        mask = tf.sequence_mask(seq_length, max_time_step, name='attention_mask', dtype=tf.float32)
+        # time major
+        mask = tf.expand_dims(tf.transpose(mask, [1, 0]), -1)
+        return mask
+    
+    def masked_softmax(logits, mask):
+        logits_max = tf.reduce_max(logits*mask, axis=0, keep_dims=True)
+        logits = logits - logits_max
+        
+        soft_max = tf.exp(logits)*mask / (tf.reduce_sum(tf.exp(logits)*mask, axis=0) + 1e-6)
+        return soft_max
+        
     with tf.variable_scope('embedding_model', reuse=reuse):
-        with tf.name_scope('input_speech'):
-            input_data = tf.transpose(input_speech, [1, 0, 2])
-            
-            #Reshaping input_data for 1st layer which is not recurrent
-            input_data = tf.reshape(input_data, [-1, CONFIG_EMBED.num_features])
-            
-            # layer 1:
-            b1 = utils.get_variable('b1',[CONFIG_EMBED.num_hidden_1], tf.zeros_initializer())
-            h1 = utils.get_variable('h1', [CONFIG_EMBED.num_features, CONFIG_EMBED.num_hidden_1], tf.contrib.layers.xavier_initializer())
-            layer_1 = tf.minimum(tf.nn.relu(tf.add(tf.matmul(input_data, h1), b1)), 20)
-            layer_1 = tf.nn.dropout(layer_1, keep_prob=keep_prob)
-            
-            # layer 2:
-            # rnn layers
-            # need to reshape layer_1 back to [max_time_step, batch_size, featuers]
-            layer_1 = tf.reshape(layer_1, [-1, batch_size, CONFIG_EMBED.num_hidden_1])
-            
-            #change the output shape from [max_time_step, batch_size, features] to [batch_size, max_time_step, features]
-            output_rnn = get_rnn(layer_1, seq_length, reuse, 'embedding_model')
-            output_rnn = tf.transpose(output_rnn, [1, 0, 2])
-            
-            # get the last relevent output
-            index = tf.range(0, batch_size)*max_time_step + (seq_length - 1)
-            flat = tf.reshape(output_rnn, [-1, CONFIG_EMBED.num_proj])
-            output = tf.gather(flat, index)
-            # output is of size [batch_size, num_embedding_features]
-            return utils.normalize(output, axis=1)
+        input_data_orig = tf.transpose(input_speech, [1, 0, 2])
+        
+        #Reshaping input_data for 1st layer which is not recurrent
+        input_data = tf.reshape(input_data_orig, [-1, CONFIG_EMBED.num_features])
+        
+        # create attention network for weighting the output sum
+        # layer 1:
+        b1 = utils.get_variable('b1',[CONFIG_EMBED.num_hidden_1], tf.zeros_initializer())
+        h1 = utils.get_variable('h1', [CONFIG_EMBED.num_features, CONFIG_EMBED.num_hidden_1], tf.contrib.layers.xavier_initializer())
+        layer_1 = tf.add(tf.matmul(input_data, h1), b1)
+        layer_1 = tf.nn.dropout(layer_1, keep_prob=keep_prob)
+        layer_1 = tf.nn.leaky_relu(layer_1)
+        
+        # layer 2
+        b2 = utils.get_variable('b2', [CONFIG_EMBED.num_hidden_1], tf.zeros_initializer())
+        h2 = utils.get_variable('h2', [CONFIG_EMBED.num_hidden_1, CONFIG_EMBED.num_hidden_1], tf.contrib.layers.xavier_initializer())
+        layer_2 = tf.add(tf.matmul(layer_1, h2), b2)
+        layer_2 = tf.nn.dropout(layer_2, keep_prob=keep_prob)
+        layer_2 = tf.nn.leaky_relu(layer_2)
+        
+        b3 = utils.get_variable('b3', [1], tf.zeros_initializer())
+        h3 = utils.get_variable('h3', [CONFIG_EMBED.num_hidden_1, 1], tf.contrib.layers.xavier_initializer())
+        layer_3 = tf.add(tf.matmul(layer_2, h3), b3)
+        
+        # layer 3:
+        # rnn layers
+        layer_3 = tf.reshape(layer_3, [-1, batch_size, 1])
+        
+        # softmax over time axis for every batch. Careful to take sofmax only for seq length
+        attention_mask = get_attention_mask(seq_length)
+        attentions = masked_softmax(layer_3, attention_mask)
+        
+        output_rnn = get_rnn(input_data_orig, seq_length, reuse, 'embedding_model')
+        # sum outputs over with attention weights
+        
+        #shape of output is batch_size, num_features
+        output = tf.reduce_sum(output_rnn*attentions, axis=0)
+        
+        # output is of size [batch_size, num_embedding_features]
+        return utils.normalize(output, axis=1), attentions
 
 def create_model_rnn(input_speech, seq_length, keep_prob, previous_state=None, reuse=False):
     """
