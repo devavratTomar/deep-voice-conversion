@@ -10,6 +10,8 @@ import random
 import numpy as np
 import librosa
 import math
+import lpc
+
 from config import CONFIG, CONFIG_EMBED
 
 TIMIT_PHONE_DICTIONARY = {
@@ -53,8 +55,17 @@ class DataProcessor_TIMIT(object):
         self.dialects = [dialect_name for dialect_name in os.listdir(self.directory)]
         self.samping_rate = sampling_rate
         self.all_speakers = self.__get_all_speakers()
-        
-        
+    
+    
+    def create_save_plc_features(self, save_path='./Dataset/TIMIT_FEATURES/TRAIN/'):
+        for speaker in self.all_speakers:
+            audio_names = [f for f in os.listdir(os.path.join(self.directory, speaker)) if f.endswith('WAV')]
+            
+            for name in audio_names:
+                audio_sample = self.__read_audio(os.path.join(self.directory, speaker, name))
+                lpc_features, _ = lpc.speech2lpc(audio_sample)
+                np.save(os.path.join(save_path, speaker, name[:-4]), lpc_features)
+    
     def __get_all_speakers(self):
         speakers = []
         for dialect in self.dialects:
@@ -119,7 +130,7 @@ class DataProcessor_TIMIT(object):
             
         return stft_all, labels
     
-    def speaker_embedding_getter(self, n_epochs=1, N=10, M=10, max_time_steps=1000):
+    def speaker_embedding_getter(self, n_epochs=1, N=30, M=10, max_time_steps=250):
         """
         Iterable to get batch of M samples from N speakers
         """
@@ -139,11 +150,13 @@ class DataProcessor_TIMIT(object):
                     samples = [f for f in os.listdir(os.path.join(self.directory, speaker)) if f.endswith('WAV')]
                     random.shuffle(samples)
                     for i, sample in enumerate(samples):
-                        features = self.create_features(self.__read_audio(os.path.join(self.directory, speaker, sample)))
+                        features = self.create_features_mfcc(self.__read_audio(os.path.join(self.directory, speaker, sample)))
                         seq_length[j*M + i] = min(features.shape[0], max_time_steps)
                         speakers_sample_data[j*M + i, 0:seq_length[j*M + i], :] = features[0:seq_length[j*M + i], :]
                 
                 yield speakers_sample_data, seq_length
+    
+    
     def all_speech_getter(self, n_epochs=1, max_time_steps=16):
         """
         Iterable over all speech sequences.
