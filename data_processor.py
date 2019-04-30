@@ -44,7 +44,7 @@ class DataProcessor_TIMIT(object):
     https://www.intechopen.com/books/speech-technologies/phoneme-recognition-on-the-timit-database.
     """
 
-    def __init__(self, path='./Dataset/TIMIT/TRAIN/', sampling_rate=16000):
+    def __init__(self, path='./Dataset/TIMIT/TRAIN/', path_lpc='./Dataset/TIMIT_FEATURES/TRAIN/', sampling_rate=16000):
         """
         Initialize the TIMIT folder path
         """
@@ -52,19 +52,69 @@ class DataProcessor_TIMIT(object):
             raise Exception("The directory name provided '{}' is incorrect.".format(path))
         
         self.directory = os.path.abspath(path)
+        self.directory_features = os.path.abspath(path_lpc)
+        
         self.dialects = [dialect_name for dialect_name in os.listdir(self.directory)]
         self.samping_rate = sampling_rate
         self.all_speakers = self.__get_all_speakers()
     
+    ######################################## Helpers for LCP features ##############################################
     
-    def create_save_plc_features(self, save_path='./Dataset/TIMIT_FEATURES/TRAIN/'):
+    def create_save_plc_features(self, window_size=320, lpc_order=40, save_path='./Dataset/TIMIT_FEATURES/TRAIN/'):
+        """
+        Run this only once to create LPC features from raw audio.
+        """
+        
         for speaker in self.all_speakers:
             audio_names = [f for f in os.listdir(os.path.join(self.directory, speaker)) if f.endswith('WAV')]
             
             for name in audio_names:
                 audio_sample = self.__read_audio(os.path.join(self.directory, speaker, name))
-                lpc_features, _ = lpc.speech2lpc(audio_sample)
+                
+                # phone processing
+                audio_phones = self.__read_phones(os.path.join(self.directory, speaker, name[:-4] + '.PHN'))
+                phone_start = audio_phones[:, 0].astype(int)
+                phone_codes = audio_phones[:, 2]
+                
+                #clip the audio to start and end mark
+                audio_sample = audio_sample[phone_start[0]: audio_phones[:,1].astype(int)[-1]]
+                phone_start = phone_start - phone_start[0]
+                
+                # get seq of lpc coefficients
+                lpc_features, _ = lpc.speech2lpc(audio_sample, window_size, lpc_order)
+                
+                # create np array of labels
+                hop_len = window_size//4
+                labels = np.zeros(lpc_features.shape[1])
+                
+                for t in range(lpc_features.shape[1]):
+                    arg_label = np.where(phone_start <= t*hop_len)[0][-1]
+                    labels[t] = TIMIT_PHONE_DICTIONARY[phone_codes[arg_label]]
+                
                 np.save(os.path.join(save_path, speaker, name[:-4]), lpc_features)
+                np.save(os.path.join(save_path, speaker, name[:-4] + '_PHN'), labels)
+    
+    def get_lpc_label_sequence(self, epochs=1, max_time_steps=16):
+        """
+        This function is an iterable over all speech data in training set and returns sequence of lpc features along with labels
+        """
+
+        for epoch in epochs:
+            for speaker in self.all_speakers:
+                audio_names = [f[:-8] for f in os.listdir(os.path.join(self.directory_features, speaker)) if f.endswith('_PHN.npy')]
+                for audio in audio_names:
+                    audio_features = np.load(os.path.join(self.directory_features, speaker, audio + '.npy'))
+                    audio_labels = np.load(os.path.join(self.directory_features, speaker, audio + '_PHN.npy'))
+                    
+                    n_buffers = math.ceil(audio_features.shape[1]/max_time_steps)
+                    buffers_container = []
+                    
+                    for buffer in range(n_buffers):
+                        buffer_start = buffer*max_time_steps
+                        buffer_end = min((buffer+1)*max_time_steps, audio_features.shape[1])
+                        
+                        buffers_container.append([audio_features[:, buffer_start:buffer_end].T, audio_labels[buffer_start:buffer_end], buffer_end - buffer_start])
+                    yield buffers_container
     
     def __get_all_speakers(self):
         speakers = []
