@@ -19,7 +19,7 @@ class Config:
 CONFIG = Config()
 CONFIG._config = {
         'relu_clip':20,
-        'num_features':322,
+        'num_features':40,
         'num_classes':61,
         'num_rnn_layers':1,
         'num_hidden_1':2048,
