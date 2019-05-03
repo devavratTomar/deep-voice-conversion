@@ -99,7 +99,7 @@ class DataProcessor_TIMIT(object):
         This function is an iterable over all speech data in training set and returns sequence of lpc features along with labels
         """
 
-        for epoch in epochs:
+        for epoch in range(epochs):
             for speaker in self.all_speakers:
                 audio_names = [f[:-8] for f in os.listdir(os.path.join(self.directory_features, speaker)) if f.endswith('_PHN.npy')]
                 for audio in audio_names:
