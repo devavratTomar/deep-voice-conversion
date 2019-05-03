@@ -15,6 +15,7 @@ import logging
 import librosa
 import numpy as np
 import os
+import lpc
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
@@ -25,6 +26,15 @@ def save_audio(original, converted, name, path='./test_cases/'):
     librosa.output.write_wav(os.path.join(path, 'original_' + name + '.WAV'), original, 16000)
     librosa.output.write_wav(os.path.join(path, 'converted_' + name + '.WAV'), converted, 16000)
 
+###################################### Generate speech from lpc and error #######################################
+def generate_speech_lpc(feature_matrix, error_matrix, window_size=320, lpc_order=40):
+    return lpc.lpc2speech(feature_matrix, error_matrix, window_size, lpc_order)
+
+def lpc_features_from_speech(audio, window_size=320, lpc_order=40):
+    features, error = lpc.speech2lpc(audio, window_size, lpc_order)
+    return features, error
+    
+#################################################################################################################
 def generate_speech_from_features(audio_features, window_size=20, sampling_rate=16000):
     window_len = sampling_rate*window_size//1000
     hop_len = window_len//4
@@ -147,10 +157,11 @@ class VoiceConverter(object):
         
 def convert_save_audio(filename = './Dataset/TIMIT/TEST/DR6/FDRW0/SI653.WAV', model_path='./output_model'):
     test_audio, _ = librosa.load(filename, sr=16000)
-    features_audio = features_from_audio(test_audio/np.max(np.abs(test_audio)))
+    features_audio, error = lpc_features_from_speech(test_audio)
     vc = VoiceConverter(model_path)
-    converted_speech_features = vc.convert(features_audio[np.newaxis, :, :])
-    converted_audio = generate_speech_from_features(converted_speech_features[0].T)
+    converted_speech_features = vc.convert(features_audio[np.newaxis, :, :].T)
+    converted_audio = generate_speech_lpc(converted_speech_features[0].T, error)
+    
     name = 'test_' + filename[(filename.rfind('/') + 1):]
     save_audio(test_audio, converted_audio, name)
 

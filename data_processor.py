@@ -115,7 +115,8 @@ class DataProcessor_TIMIT(object):
                         
                         buffers_container.append([audio_features[:, buffer_start:buffer_end].T, audio_labels[buffer_start:buffer_end], buffer_end - buffer_start])
                     yield buffers_container
-    
+                    
+    ######################################################### STFT features ###########################################################
     def __get_all_speakers(self):
         speakers = []
         for dialect in self.dialects:
