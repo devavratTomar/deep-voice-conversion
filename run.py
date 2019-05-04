@@ -19,4 +19,4 @@ dp = DataProcessor_TIMIT()
 rnn_model = DeepPhonemeModel(batch_size=1)
 
 trainer = DeepPhoenemeModelTrainer(rnn_model)
-trainer.train(dp.get_lpc_label_sequence, './output_model', 0.70, 16, 5, 100, model_save_step=1000, restore=False)
+trainer.train(dp.get_lpc_label_sequence, './output_model', 0.70, 16, 5, 100, model_save_step=1000, restore=True)

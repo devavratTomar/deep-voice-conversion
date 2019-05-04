@@ -96,11 +96,11 @@ class VoiceConverter(object):
                                                                      reuse=True)
         
         
-        self.cost = self.__get_cost([self.layers_content['rnn_output'], self.layers_content['layer_3'], self.layers_content['layer_6']], [self.layers_gen_speech['rnn_output'], self.layers_gen_speech['layer_3'], self.layers_gen_speech['layer_6']])
+        self.cost = self.__get_cost(self.layers_content['rnn_output'], self.layers_gen_speech['rnn_output'])
 
         
     def __get_cost(self, features_content, features_gen, embedding_gen=None, embedding_style=None):
-        return tf.losses.mean_squared_error(features_content[0], features_gen[0]) + tf.losses.mean_squared_error(features_content[1], features_gen[1]) + tf.losses.mean_squared_error(features_content[2], features_content[2])
+        return tf.losses.mean_squared_error(features_content, features_gen)
     
     
     def __get_optimizer(self, global_step):
@@ -128,7 +128,7 @@ class VoiceConverter(object):
     def output_logs(self, mse, step):
         print("Step: {}, MSE: {}".format(step, mse))
         
-    def convert(self, content_speech, style_speech=None, max_iter=100):
+    def convert(self, content_speech, style_speech=None, max_iter=5):
         """
         content_speech should be of the shape [1, max_time, num_features]
         """
@@ -158,10 +158,14 @@ class VoiceConverter(object):
 def convert_save_audio(filename = './Dataset/TIMIT/TEST/DR6/FDRW0/SI653.WAV', model_path='./output_model'):
     test_audio, _ = librosa.load(filename, sr=16000)
     features_audio, error = lpc_features_from_speech(test_audio)
+    print("features shape:", features_audio.shape)
+    print("features shape: input: ", features_audio.T[np.newaxis, :, :].shape)
     vc = VoiceConverter(model_path)
-    converted_speech_features = vc.convert(features_audio[np.newaxis, :, :].T)
+    converted_speech_features = vc.convert(features_audio.T[np.newaxis, :, :])
+
+    print("converted_speech_features shape", converted_speech_features.shape)
     converted_audio = generate_speech_lpc(converted_speech_features[0].T, error)
-    
+
     name = 'test_' + filename[(filename.rfind('/') + 1):]
     save_audio(test_audio, converted_audio, name)
 
