@@ -128,7 +128,7 @@ class VoiceConverter(object):
     def output_logs(self, mse, step):
         print("Step: {}, MSE: {}".format(step, mse))
         
-    def convert(self, content_speech, style_speech=None, max_iter=5):
+    def convert(self, content_speech, style_speech=None, max_iter=100):
         """
         content_speech should be of the shape [1, max_time, num_features]
         """
@@ -143,7 +143,7 @@ class VoiceConverter(object):
         
         with tf.Session() as sess:
             sess.run(init)
-            #sess.run(tf.assign(self.speech_gen, content_speech + np.random.normal(scale=1.0, size=content_speech.shape)))
+            sess.run(tf.assign(self.speech_gen, content_speech + np.random.normal(scale=0.5, size=content_speech.shape)))
             self.restore(sess)
             for it in range(max_iter):
                 _, loss, speech_gen = sess.run((optimizer, self.cost, self.speech_gen),
