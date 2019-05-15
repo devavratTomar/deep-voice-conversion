@@ -22,7 +22,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
 class DeepSpeakerEmbedder:
     #we keep batch size as number of speakers*numberofsamples
     def __init__(self, num_speakers=30, num_samples=10, max_time_step=1000):
-        
         tf.reset_default_graph()
         batch_size = num_speakers*num_samples
         

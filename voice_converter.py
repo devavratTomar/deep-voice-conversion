@@ -66,18 +66,23 @@ class VoiceConverter(object):
     Initial implementation: we reconstruct speech only from phoneme classifier.
     """
     
-    def __init__(self, phoneme_recognizer_model_path, speaker_embedder_model_path=None):
+    def __init__(self, phoneme_recognizer_model_path, speaker_embedder_model_path):
         self.pr_model_path = phoneme_recognizer_model_path
         self.se_model_path = speaker_embedder_model_path        
         
     def create_graphs(self, max_time_step):
-        #TODO: create the two graphs on separate gpus
-        
         tf.reset_default_graph()
         
         self.content_speech = tf.placeholder(tf.float32, [1, max_time_step, CONFIG.num_features], name='content_speech')
-        self.content_seq_length = tf.placeholder(tf.int32, [1], name='seq_length')
+        self.content_seq_length = tf.placeholder(tf.int32, [1], name='content_seq_length')
         
+        self.style_speech = tf.placeholder(tf.float32, [1, None, CONFIG.num_features])
+        self.style_seq_length = tf.placeholder(tf.int32, [1], name='style_seq_length')
+        
+        self.speech_gen = utils.get_variable('converted_speech', [1, max_time_step, CONFIG.num_features],
+                                             initializer=tf.contrib.layers.xavier_initializer())
+        
+        # Content generation
         initial_state = tf.contrib.rnn.LSTMStateTuple(tf.zeros([1, CONFIG.num_cell_dim]), tf.zeros([1, CONFIG.num_cell_dim]))
         
         logits_content, self.layers_content = create_model_rnn(self.content_speech,
@@ -86,9 +91,6 @@ class VoiceConverter(object):
                                                                previous_state=initial_state,
                                                                reuse=False)
         
-        #self.style_speech = tf.placeholder(tf.float32, [1, None, CONFIG.num_features])
-        self.speech_gen = utils.get_variable('converted_speech', [1, max_time_step, CONFIG.num_features], initializer=tf.contrib.layers.xavier_initializer())
-        
         logits_gen_speech, self.layers_gen_speech = create_model_rnn(self.speech_gen,
                                                                      self.content_seq_length,
                                                                      keep_prob=1.0,
@@ -96,11 +98,24 @@ class VoiceConverter(object):
                                                                      reuse=True)
         
         
-        self.cost = self.__get_cost(self.layers_content['rnn_output'], self.layers_gen_speech['rnn_output'])
+        # Style generation
+        embedding_style, _ = create_speaker_embedder_model(self.style_speech,
+                                                           self.style_seq_length,
+                                                           keep_prob=1.0)
+        
+        embedding_gen_speech, _ = create_speaker_embedder_model(self.speech_gen,
+                                                                self.content_seq_length,
+                                                                keep_prob=1.0 , reuse=True)
+        
+        self.cost = self.__get_cost(self.layers_content['rnn_output'], self.layers_gen_speech['rnn_output'],
+                                    embedding_style, embedding_gen_speech)
 
         
-    def __get_cost(self, features_content, features_gen, embedding_gen=None, embedding_style=None):
-        return tf.losses.mean_squared_error(features_content, features_gen)
+    def __get_cost(self, features_content, features_gen, embedding_style, embedding_gen):
+        alpha = 1.0
+        print(embedding_style.shape)
+        return tf.losses.mean_squared_error(features_content, features_gen)+\
+               alpha*tf.losses.cosine_distance(embedding_style, embedding_gen, axis=1)
     
     
     def __get_optimizer(self, global_step):
@@ -115,10 +130,20 @@ class VoiceConverter(object):
         :param sess: current session instance
         :param model_path: path to file system checkpoint location
         """
-        #TODO: restore other model as well
         ckpt = tf.train.get_checkpoint_state(self.pr_model_path)
         if ckpt and ckpt.model_checkpoint_path:
-            saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rnn_model'), restore_sequentially=True)
+            saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rnn_model'),
+                                   restore_sequentially=True)
+            saver.restore(session, ckpt.model_checkpoint_path )
+            logging.info("Model restored from file: {}".format(self.pr_model_path))
+        
+        else:
+            raise Exception("Cannot load the model")
+        
+        ckpt = tf.train.get_checkpoint_state(self.se_model_path)
+        if ckpt and ckpt.model_checkpoint_path:
+            saver = tf.train.Saver(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='embedding_model'),
+                                   restore_sequentially=True)
             saver.restore(session, ckpt.model_checkpoint_path )
             logging.info("Model restored from file: {}".format(self.pr_model_path))
         
@@ -128,12 +153,14 @@ class VoiceConverter(object):
     def output_logs(self, mse, step):
         print("Step: {}, MSE: {}".format(step, mse))
         
-    def convert(self, content_speech, style_speech=None, max_iter=100):
+    def convert(self, content_speech, style_speech, max_iter=10):
         """
         content_speech should be of the shape [1, max_time, num_features]
         """
         
         max_time_step = content_speech.shape[1]
+        style_max_time_step = style_speech.shape[1]
+        
         self.create_graphs(max_time_step)
         
         global_step = tf.Variable(0, name='global_step')
@@ -143,30 +170,43 @@ class VoiceConverter(object):
         
         with tf.Session() as sess:
             sess.run(init)
-            sess.run(tf.assign(self.speech_gen, content_speech + np.random.normal(scale=0.5, size=content_speech.shape)))
+            sess.run(tf.assign(self.speech_gen, content_speech + np.random.normal(scale=1.0, size=content_speech.shape)))
             self.restore(sess)
             for it in range(max_iter):
                 _, loss, speech_gen = sess.run((optimizer, self.cost, self.speech_gen),
                                                feed_dict= {
                                                        self.content_speech:content_speech,
                                                        self.content_seq_length:[max_time_step],
+                                                       self.style_speech:style_speech,
+                                                       self.style_seq_length: [style_max_time_step]
                                                        })
                 self.output_logs(loss, it)
             
             return speech_gen
         
-def convert_save_audio(filename = './Dataset/TIMIT/TEST/DR6/FDRW0/SI653.WAV', model_path='./output_model'):
-    test_audio, _ = librosa.load(filename, sr=16000)
-    features_audio, error = lpc_features_from_speech(test_audio)
-    print("features shape:", features_audio.shape)
-    print("features shape: input: ", features_audio.T[np.newaxis, :, :].shape)
-    vc = VoiceConverter(model_path)
-    converted_speech_features = vc.convert(features_audio.T[np.newaxis, :, :])
+def convert_save_audio(content='./Dataset/TIMIT/TRAIN/DR6/FAPB0/SA1.WAV',
+                       style='./Dataset/TIMIT/TRAIN/DR1/MCPM0/SA1.WAV',
+                       speech_to_text_model_path='./output_model',
+                       speaker_embedder_path='./output_model_embedder'):
+    
+    content_audio, _ = librosa.load(content, sr=16000)
+    features_content, error_content = lpc_features_from_speech(content_audio)
+    
+    style_audio, _ = librosa.load(style, sr=16000)
+    features_style, _ = lpc_features_from_speech(style_audio)
+    
+    vc = VoiceConverter(speech_to_text_model_path,
+                        speaker_embedder_path)
+    
+    converted_speech_features = vc.convert(features_content.T[np.newaxis, :, :],
+                                           features_style.T[np.newaxis, :, :])
 
     print("converted_speech_features shape", converted_speech_features.shape)
-    converted_audio = generate_speech_lpc(converted_speech_features[0].T, error)
+    converted_audio = generate_speech_lpc(converted_speech_features[0].T, error_content)
 
-    name = 'test_' + filename[(filename.rfind('/') + 1):]
-    save_audio(test_audio, converted_audio, name)
+    name = 'test_' + content[(content.rfind('/') + 1):]
+    save_audio(content_audio, converted_audio, name)
+    
+    return converted_speech_features
 
-convert_save_audio()
+converted_features = convert_save_audio()
