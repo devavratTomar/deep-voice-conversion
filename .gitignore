@@ -1,4 +1,5 @@
 /Dataset/*
 __pyc*
-output_model/*
-output_model_embedder/*
+output_model*/*
+output_model_embedder*/*
+test_cases/*

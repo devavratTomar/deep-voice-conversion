@@ -207,6 +207,8 @@ def convert_save_audio(content='./Dataset/TIMIT/TRAIN/DR6/FAPB0/SA1.WAV',
     name = 'test_' + content[(content.rfind('/') + 1):]
     save_audio(content_audio, converted_audio, name)
     
+    np.save('test_' + content[(content.rfind('/')+1):] + 'spectrogram', converted_speech_features)
+    
     return converted_speech_features
 
 converted_features = convert_save_audio()
