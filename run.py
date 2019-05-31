@@ -11,7 +11,7 @@ from lstm_voice_model import DeepPhoenemeModelTrainer
 import os
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 dp = DataProcessor_TIMIT()
     
@@ -19,4 +19,4 @@ dp = DataProcessor_TIMIT()
 rnn_model = DeepPhonemeModel(batch_size=1)
 
 trainer = DeepPhoenemeModelTrainer(rnn_model)
-trainer.train(dp.get_lpc_label_sequence, './output_model', 0.70, 16, 5, 100, model_save_step=1000, restore=True)
+trainer.train(dp.all_speech_getter, './output_model_stft', 0.70, 16, 5, 100, model_save_step=1000, restore=True)

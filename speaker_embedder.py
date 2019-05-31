@@ -144,7 +144,6 @@ class DeepSpeakerModelTrainer():
     def train(self, data_provider_train,
               output_path,
               keep_prob,
-              max_time_step,
               epochs=5,
               display_step=1,
               model_save_step=1000,

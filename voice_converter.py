@@ -5,7 +5,6 @@ Created on Thu Mar  7 10:24:04 2019
 @author: devav
 """
 
-#TODO: create speaker-embedder model in model generator and load it here
 from model_generator import create_model_rnn, create_speaker_embedder_model
 from config import CONFIG 
 
@@ -18,6 +17,22 @@ import os
 import lpc
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
+
+###################### Generate speech from Magnitude Spectrum using Griffin Lim Algorithm ######################
+def generate_speech_mag_stft(mag_stft, win_length=320, max_iter=100):
+    hop_len = win_length//4
+    aud_len = hop_len*(mag_stft.shape[1] - 1) + win_length
+    
+    y = np.random.random(aud_len)
+    
+    for i in range(max_iter):
+        stft_y = librosa.core.stft(y, n_fft=win_length, win_length=win_length, center=False)
+        stft_y = mag_stft*stft_y/np.abs(stft_y)
+        y = librosa.core.istft(stft_y, win_length=win_length, center=False)
+    
+    return y
+
 
 def save_audio(original, converted, name, path='./test_cases/'):
     if not os.path.exists(path):

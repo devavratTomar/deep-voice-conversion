@@ -122,7 +122,7 @@ class DeepPhoenemeModelTrainer(object):
         self.model = model
     
     def __get_optimizer(self, global_step):
-        optimizer = tf.train.AdamOptimizer(learning_rate=0.0001, beta1=0.9, beta2=0.999, epsilon=1e-8)\
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.001, beta1=0.9, beta2=0.999, epsilon=1e-8)\
                             .minimize(self.model.cost, global_step=global_step, var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='rnn_model'))
                             
         return optimizer
