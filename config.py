@@ -19,7 +19,7 @@ class Config:
 CONFIG = Config()
 CONFIG._config = {
         'relu_clip':20,
-        'num_features':160,
+        'num_features':161,
         'num_classes':61,
         'num_rnn_layers':1,
         'num_hidden_1':2048,
@@ -32,7 +32,7 @@ CONFIG._config = {
 CONFIG_EMBED = Config()
 CONFIG_EMBED._config = {
         'relu_clip':20,
-        'num_features':40,
+        'num_features':161,
         'num_hidden_1':128,
         'num_rnn_hidden':786,
         'num_proj':256

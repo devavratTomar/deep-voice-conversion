@@ -10,7 +10,7 @@ from speaker_embedder import DeepSpeakerEmbedder, DeepSpeakerModelTrainer
 import os
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '2'
 
 dp = DataProcessor_TIMIT()
 rnn_model = DeepSpeakerEmbedder()
