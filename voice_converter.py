@@ -18,8 +18,18 @@ import lpc
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
+def save_audio(original, converted, name, path='./test_cases/'):
+    if not os.path.exists(path):
+        os.mkdir(path)
+    
+    librosa.output.write_wav(os.path.join(path, 'original_' + name + '.WAV'), original, 16000)
+    librosa.output.write_wav(os.path.join(path, 'converted_' + name + '.WAV'), converted, 16000)
+
 
 ###################### Generate speech from Magnitude Spectrum using Griffin Lim Algorithm ######################
+def get_mag_stft(audio, window_len=320):
+    return np.abs(librosa.core.stft(audio, n_fft=window_len, win_length=window_len))
+
 def generate_speech_mag_stft(mag_stft, win_length=320, max_iter=100):
     hop_len = win_length//4
     aud_len = hop_len*(mag_stft.shape[1] - 1) + win_length
@@ -32,14 +42,6 @@ def generate_speech_mag_stft(mag_stft, win_length=320, max_iter=100):
         y = librosa.core.istft(stft_y, win_length=win_length, center=False)
     
     return y
-
-
-def save_audio(original, converted, name, path='./test_cases/'):
-    if not os.path.exists(path):
-        os.mkdir(path)
-    
-    librosa.output.write_wav(os.path.join(path, 'original_' + name + '.WAV'), original, 16000)
-    librosa.output.write_wav(os.path.join(path, 'converted_' + name + '.WAV'), converted, 16000)
 
 ###################################### Generate speech from lpc and error #######################################
 def generate_speech_lpc(feature_matrix, error_matrix, window_size=320, lpc_order=40):
@@ -201,14 +203,16 @@ class VoiceConverter(object):
         
 def convert_save_audio(content='./Dataset/TIMIT/TRAIN/DR6/FAPB0/SA1.WAV',
                        style='./Dataset/TIMIT/TRAIN/DR1/MCPM0/SA1.WAV',
-                       speech_to_text_model_path='./output_model',
-                       speaker_embedder_path='./output_model_embedder'):
+                       speech_to_text_model_path='./output_model_stft',
+                       speaker_embedder_path='./output_model_embedder_stft'):
     
     content_audio, _ = librosa.load(content, sr=16000)
-    features_content, error_content = lpc_features_from_speech(content_audio)
+    #features_content, error_content = lpc_features_from_speech(content_audio)
+    features_content = get_mag_stft(content_audio)
     
     style_audio, _ = librosa.load(style, sr=16000)
-    features_style, _ = lpc_features_from_speech(style_audio)
+    #features_style, _ = lpc_features_from_speech(style_audio)
+    features_style = get_mag_stft(style_audio)
     
     vc = VoiceConverter(speech_to_text_model_path,
                         speaker_embedder_path)
@@ -217,9 +221,11 @@ def convert_save_audio(content='./Dataset/TIMIT/TRAIN/DR6/FAPB0/SA1.WAV',
                                            features_style.T[np.newaxis, :, :])
 
     print("converted_speech_features shape", converted_speech_features.shape)
-    converted_audio = generate_speech_lpc(converted_speech_features[0].T, error_content)
-
+    #converted_audio = generate_speech_lpc(converted_speech_features[0].T, error_content)
+    
+    converted_audio = generate_speech_mag_stft(converted_speech_features[0].T)
     name = 'test_' + content[(content.rfind('/') + 1):]
+    
     save_audio(content_audio, converted_audio, name)
     
     np.save('test_' + content[(content.rfind('/')+1):] + 'spectrogram', converted_speech_features)
