@@ -169,9 +169,10 @@ def create_model_rnn(input_speech, seq_length, keep_prob, previous_state=None, r
             
             layers['layer_6'] = layer_6
             # Finally we reshape layer_6 from a tensor of shape [n_steps*batch_size, n_classes]
-            # to tensor [batch_size, n_step, n_classes]
+            # to tensor [n_step, batch_size, n_classes]
             
-            layer_6 = tf.reshape(layer_6, [batch_size, -1, CONFIG.num_classes])
+            layer_6 = tf.reshape(layer_6, [-1, batch_size, CONFIG.num_classes])
+            layer_6 = tf.transpose(layer_6, [1, 0, 2])
             layers['raw_logits'] = layer_6
             
             return layer_6, layers

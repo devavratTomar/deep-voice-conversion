@@ -19,4 +19,4 @@ dp = DataProcessor_TIMIT()
 rnn_model = DeepPhonemeModel(batch_size=1)
 
 trainer = DeepPhoenemeModelTrainer(rnn_model)
-trainer.train(dp.all_speech_getter, './output_model_stft', 0.70, 16, 5, 100, model_save_step=1000, restore=True)
+trainer.train(dp.all_speech_getter, './output_model_stft', 0.50, 16, 3, 100, model_save_step=1000, restore=False)

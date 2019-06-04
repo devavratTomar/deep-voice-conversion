@@ -22,11 +22,11 @@ CONFIG._config = {
         'num_features':161,
         'num_classes':61,
         'num_rnn_layers':1,
-        'num_hidden_1':2048,
-        'num_hidden_2':2048,
-        'num_hidden_3':2048,
-        'num_cell_dim':2048,
-        'num_hidden_5':1024
+        'num_hidden_1':512,
+        'num_hidden_2':256,
+        'num_hidden_3':256,
+        'num_cell_dim':512,
+        'num_hidden_5':512
         }
 
 CONFIG_EMBED = Config()
