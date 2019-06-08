@@ -208,11 +208,11 @@ def convert_save_audio(content='./Dataset/TIMIT/TRAIN/DR6/FAPB0/SA1.WAV',
     
     content_audio, _ = librosa.load(content, sr=16000)
     #features_content, error_content = lpc_features_from_speech(content_audio)
-    features_content = get_mag_stft(content_audio)
+    features_content = features_from_audio(content_audio)
     
     style_audio, _ = librosa.load(style, sr=16000)
     #features_style, _ = lpc_features_from_speech(style_audio)
-    features_style = get_mag_stft(style_audio)
+    features_style = features_from_audio(style_audio)
     
     vc = VoiceConverter(speech_to_text_model_path,
                         speaker_embedder_path)
@@ -223,7 +223,7 @@ def convert_save_audio(content='./Dataset/TIMIT/TRAIN/DR6/FAPB0/SA1.WAV',
     print("converted_speech_features shape", converted_speech_features.shape)
     #converted_audio = generate_speech_lpc(converted_speech_features[0].T, error_content)
     
-    converted_audio = generate_speech_mag_stft(converted_speech_features[0].T)
+    converted_audio = generate_speech_from_features(converted_speech_features[0].T)
     name = 'test_' + content[(content.rfind('/') + 1):]
     
     save_audio(content_audio, converted_audio, name)

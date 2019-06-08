@@ -25,7 +25,7 @@ class DeepSpeakerEmbedder:
         tf.reset_default_graph()
         batch_size = num_speakers*num_samples
         
-        self.speech_data = tf.placeholder(tf.float32, [batch_size,  max_time_step, CONFIG_EMBED.num_features], name='speech_data_batch')
+        self.speech_data = tf.placeholder(tf.float32, [batch_size,  max_time_step, 2*CONFIG_EMBED.num_features], name='speech_data_batch')
         self.seq_length = tf.placeholder(tf.int32, [batch_size], name='seq_length')
         self.keep_prob = tf.placeholder(tf.float32, name="dropout_prob")
         

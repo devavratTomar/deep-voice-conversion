@@ -47,6 +47,7 @@ class DataProcessor_TIMIT(object):
     def __init__(self, path='./Dataset/TIMIT/TRAIN/',
                  path_lpc='./Dataset/TIMIT_FEATURES/TRAIN/',
                  path_mag='./Dataset/TIMIT_FEATURES_MAG/TRAIN/',
+                 path_stft = './Dataset/TIMIT_FEATURES_STFT/TRAIN',
                  sampling_rate=16000):
         """
         Initialize the TIMIT folder path
@@ -57,6 +58,7 @@ class DataProcessor_TIMIT(object):
         self.directory = os.path.abspath(path)
         self.directory_features = os.path.abspath(path_lpc)
         self.directory_features_mag = os.path.abspath(path_mag)
+        self.directory_features_stft = os.path.abspath(path_stft)
         
         self.dialects = [dialect_name for dialect_name in os.listdir(self.directory)]
         self.samping_rate = sampling_rate
@@ -176,6 +178,43 @@ class DataProcessor_TIMIT(object):
                 
                 np.save(os.path.join(save_path, speaker, name[:-4]), stft_features)
                 np.save(os.path.join(save_path, speaker, name[:-4] + '_PHN'), labels)
+                
+    ######################################################### STFT features ###########################################################
+    def create_save_stft(self, window_size=320, save_path='./Dataset/TIMIT_FEATURES_STFT/TRAIN/'):
+        """
+        Run this only once to create stft mag features from raw audio.
+        """
+        for speaker in self.all_speakers:
+            audio_names = [f for f in os.listdir(os.path.join(self.directory, speaker)) if f.endswith('WAV')]
+            
+            for name in audio_names:
+                audio_sample = self.__read_audio(os.path.join(self.directory, speaker, name))
+                
+                # phone processing
+                audio_phones = self.__read_phones(os.path.join(self.directory, speaker, name[:-4] + '.PHN'))
+                
+                phone_start = audio_phones[:, 0].astype(int)
+                phone_codes = audio_phones[:, 2]
+                
+                #clip the audio to start and end mark
+                audio_sample = audio_sample[phone_start[0]: audio_phones[:,1].astype(int)[-1]]
+                phone_start = phone_start - phone_start[0]
+                
+                # get seq of magnitude fourier coefficients
+                stft_features = librosa.core.stft(audio_sample, n_fft=window_size, win_length=window_size, center=False)
+                stft_features_concat = np.concatenate([np.real(stft_features), np.imag(stft_features)])
+                
+                # create np array of labels
+                hop_len = window_size//4
+                labels = np.zeros(stft_features.shape[1])
+                
+                for t in range(stft_features.shape[1]):
+                    arg_label = np.where(phone_start <= t*hop_len)[0][-1]
+                    labels[t] = TIMIT_PHONE_DICTIONARY[phone_codes[arg_label]]
+                
+                np.save(os.path.join(save_path, speaker, name[:-4]), stft_features_concat)
+                np.save(os.path.join(save_path, speaker, name[:-4] + '_PHN'), labels)
+                
     
     def speaker_embedding_getter(self, n_epochs=1, N=20, M=10, max_time_steps=600):
         """
@@ -197,7 +236,7 @@ class DataProcessor_TIMIT(object):
                     samples = [f[:-4] for f in os.listdir(os.path.join(self.directory, speaker)) if f.endswith('WAV')]
                     random.shuffle(samples)
                     for i, sample in enumerate(samples):
-                        features = np.load(os.path.join(self.directory_features_mag, speaker, sample + '.npy')).T
+                        features = np.load(os.path.join(self.directory_features_stft, speaker, sample + '.npy')).T
                         seq_length[j*M + i] = min(features.shape[0], max_time_steps)
                         speakers_sample_data[j*M + i, 0:seq_length[j*M + i], :] = features[0:seq_length[j*M + i], :]
                 
@@ -212,12 +251,12 @@ class DataProcessor_TIMIT(object):
         for epoch in range(n_epochs):
             random.shuffle(self.all_speakers)
             for speaker in self.all_speakers:
-                audio_names = [f[:-8] for f in os.listdir(os.path.join(self.directory_features_mag, speaker)) if f.endswith('_PHN.npy')]
+                audio_names = [f[:-8] for f in os.listdir(os.path.join(self.directory_features_stft, speaker)) if f.endswith('_PHN.npy')]
                 random.shuffle(audio_names)
                 
                 for audio in audio_names:
-                    audio_features = np.load(os.path.join(self.directory_features_mag, speaker, audio + '.npy'))
-                    audio_labels = np.load(os.path.join(self.directory_features_mag, speaker, audio + '_PHN.npy'))
+                    audio_features = np.load(os.path.join(self.directory_features_stft, speaker, audio + '.npy'))
+                    audio_labels = np.load(os.path.join(self.directory_features_stft, speaker, audio + '_PHN.npy'))
                     
                     n_buffers = math.ceil(audio_features.shape[1]/max_time_steps)
                     buffers_container = []

@@ -45,6 +45,11 @@ def create_speaker_embedder_model(input_speech, seq_length, keep_prob, reuse=Fal
         return soft_max
         
     with tf.variable_scope('embedding_model', reuse=reuse):
+        
+        # compute magnitude spectrum
+        input_speech = tf.reshape(input_speech, [batch_size, max_time_step, -1, 2])
+        input_speech = tf.reduce_sum(input_speech**2, axis=3)
+        
         input_data_orig = tf.transpose(input_speech, [1, 0, 2])
         
         #Reshaping input_data for 1st layer which is not recurrent
