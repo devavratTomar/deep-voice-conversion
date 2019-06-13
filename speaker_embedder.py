@@ -52,6 +52,16 @@ class DeepSpeakerEmbedder:
         
         return -tf.reduce_mean(S_correct-tf.log(tf.reduce_sum(tf.exp(S), axis=1, keep_dims=True) + 1e-6))
     
+    def predict_embeddings(self, model_path, speaker_data, seq_len):
+        init = tf.global_variables_initializer()
+        
+        with tf.Session() as sess:
+            sess.run(init)
+            self.restore(sess, model_path)
+            predictions = sess.run(self.embeddings, feed_dict={self.speech_data: speaker_data,
+                                                               self.seq_length: seq_len,
+                                                               self.keep_prob: 1.0})
+        return predictions
     
     def save(self, sess, model_path):
         """
